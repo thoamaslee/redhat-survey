@@ -95,6 +95,16 @@
     transition: color 0.15s, border-color 0.15s;
   }
   .btn-add-tab:hover { color: var(--red); border-color: var(--red); }
+  .sort-control {
+    margin-left: auto; display: flex; align-items: center; gap: 6px;
+    padding: 0 4px; flex-shrink: 0;
+  }
+  .sort-control label { font-size: 11px; color: var(--text-light); white-space: nowrap; }
+  .sort-control select {
+    border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px;
+    font-size: 11px; color: var(--text); background: #fff; cursor: pointer; outline: none;
+  }
+  .sort-control select:focus { border-color: var(--red); }
 
   /* Form body */
   .form-body { flex: 1; overflow-y: auto; padding: 20px; }
@@ -231,6 +241,14 @@
   <div class="form-panel">
     <div class="tabs-bar" id="tabs-bar">
       <button class="btn-add-tab" onclick="addRespondent()" title="응답자 추가">+</button>
+      <div class="sort-control">
+        <label>정렬:</label>
+        <select id="sort-select" onchange="renderTabs()">
+          <option value="no">No. 순</option>
+          <option value="name">이름 순</option>
+          <option value="company">회사명 순</option>
+        </select>
+      </div>
     </div>
     <div class="form-body" id="form-body">
       <div class="empty-state">
@@ -300,7 +318,7 @@ async function uploadPDF(input) {
     currentPage = 0;
     renderPage(0);
     document.getElementById('pdf-nav').style.display = 'flex';
-    showToast(`PDF ${data.total}뎘이지 로드 완료`, 'success');
+    showToast(`PDF ${data.total}페이지 로드 완료`, 'success');
   } catch (e) {
     showToast('PDF 처리 실패: ' + e.message, 'error');
   } finally {
@@ -389,21 +407,51 @@ function saveCurrentForm() {
 // ─── Render ──────────────────────────────────────────
 function renderTabs() {
   const bar = document.getElementById('tabs-bar');
+  // 정렬 기준 유지
+  const sortSel = document.getElementById('sort-select');
+  const sortBy = sortSel ? sortSel.value : 'no';
+
+  // 인덱스 포함 복사본 정렬
+  const sorted = respondents.map((r, i) => ({ r, i }));
+  sorted.sort((a, b) => {
+    if (sortBy === 'name') {
+      const na = (a.r.lastName + a.r.firstName).toLowerCase() || `응답자${b.r.no}`;
+      return na.localeCompare(nb, 'ko');
+    } else if (sortBy === 'company') {
+      const ca = a.r.company.toLowerCase() || '';
+      const cb = b.r.company.toLowerCase() || '';
+      return ca.localeCompare(cb, 'ko') || a.r.no - b.r.no;
+    }
+    return a.r.no - b.r.no; // 기본: No. 순
+  });
+
   bar.innerHTML = '';
-  respondents.forEach((r, i) => {
-    const name = (r.lastName || r.firstName) ? `${r.lastName}${r.firstName}` : `응답자 ${i+1}`;
+  sorted.forEach(({ r, i }) => {
+    const name = (r.lastName || r.firstName) ? `${r.lastName}${r.firstName}` : `응답자 ${r.no}`;
     const tab = document.createElement('div');
     tab.className = 'tab' + (i === currentRespondent ? ' active' : '');
     tab.onclick = () => selectRespondent(i);
     tab.innerHTML = `No.${r.no} ${name}<span class="tab-del" onclick="deleteRespondent(${i}, event)">×</span>`;
     bar.appendChild(tab);
   });
+
   const addBtn = document.createElement('button');
   addBtn.className = 'btn-add-tab';
   addBtn.textContent = '+';
   addBtn.title = '응답자 추가';
   addBtn.onclick = addRespondent;
   bar.appendChild(addBtn);
+
+  // 정렬 드롭다운 복원
+  const sortDiv = document.createElement('div');
+  sortDiv.className = 'sort-control';
+  sortDiv.innerHTML = `<label>정렬:</label>
+    <select id="sort-select" onchange="renderTabs()">
+      <option value="no" ${sortBy==='no'?'selected':''}>No. 순</option>
+      <option value="name" ${sortBy==='name'?'selected':''}>이름 순</option>
+      <option value="company" ${sortBy==='company'?'selected':''}>회사명 순</option>
+    </select>`;
+  bar.appendChild(sortDiv);
 }
 
 function renderForm() {
